@@ -1,0 +1,546 @@
+@extends('layouts.app')
+
+@section('content')
+<div class="row mb-4">
+    <div class="col">
+        <h4 class="fw-bold"><i class="bi bi-plus-circle me-2"></i>Agregar horario</h4>
+    </div>
+    <div class="col-auto">
+        <a href="{{ route('horarios.index') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>Volver
+        </a>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-white fw-semibold">
+        <i class="bi bi-file-earmark-person me-1 text-primary"></i>
+        Cargar desde una designación
+        <span class="badge bg-info ms-2">Opcional</span>
+    </div>
+    <div class="card-body">
+        <p class="text-muted small mb-3">
+            Seleccioná una designación para completar automáticamente los datos del horario.
+        </p>
+        <div class="row g-3">
+            <div class="col-md-8">
+                <select id="selectDesignacion" class="form-select">
+                    <option value="">— Seleccioná una designación para autocompletar —</option>
+                    @foreach($designacionesFilas as $i => $f)
+                        <option value="{{ $i }}"
+                            data-nombreestablecimiento="{{ $f['nombreestablecimiento'] }}"
+                            data-numeroescuela="{{ $f['numeroescuela'] ?? '' }}"
+                            data-nombremateria="{{ $f['nombremateria'] }}"
+                            data-anodesignado="{{ $f['anodesignado'] }}"
+                            data-divisiondesignada="{{ $f['divisiondesignada'] }}"
+                            data-turno="{{ $f['turno'] }}"
+                            data-dia="{{ $f['dia'] }}"
+                            data-horaentrada="{{ $f['horaentrada'] }}"
+                            data-horasalida="{{ $f['horasalida'] }}">
+                            {{ $f['nombreestablecimiento'] }} — {{ $f['nombremateria'] }}
+                            ({{ \App\Models\Designacion::DIAS[$f['dia']] ?? $f['dia'] }}
+                            {{ $f['horaentrada'] }}-{{ $f['horasalida'] }})
+                            — {{ $f['anodesignado'] }}° {{ $f['divisiondesignada'] }} {{ $f['turno'] }}
+                            @if($f['tipohorario'] === 'dividido')
+                                · dividido
+                            @endif
+                        </option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="col-md-4 d-flex align-items-end">
+                <button type="button" class="btn btn-outline-primary w-100" onclick="autocompletar()">
+                    <i class="bi bi-magic me-1"></i>Autocompletar campos
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-body">
+        <form method="POST" action="{{ route('horarios.store') }}">
+            @csrf
+
+            @if($errors->any())
+                <div class="alert alert-danger mb-3">
+                    <ul class="mb-0">
+                        @foreach($errors->all() as $error)
+                            <li>{{ $error }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
+
+            <div class="row g-3">
+
+                {{-- Establecimiento --}}
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Establecimiento</label>
+                    <div class="input-group">
+                        <select name="establecimiento_id" id="establecimiento_id" class="form-select">
+                            <option value="">— Sin establecimiento —</option>
+                            @foreach($establecimientos as $est)
+                                <option value="{{ $est->id }}"
+                                    data-nombre="{{ strtolower($est->nombre) }}"
+                                    {{ old('establecimiento_id') == $est->id ? 'selected' : '' }}>
+                                    {{ $est->nombre }}
+                                </option>
+                            @endforeach
+                        </select>
+                        <button type="button" class="btn btn-outline-secondary" title="Agregar establecimiento"
+                                data-bs-toggle="modal" data-bs-target="#modalEstablecimiento">
+                            <i class="bi bi-plus-lg"></i>
+                        </button>
+                    </div>
+                    <div id="hintEstablecimiento" class="form-text text-warning d-none">
+                        <i class="bi bi-exclamation-triangle me-1"></i>
+                        
+                    </div>
+                </div>
+
+                {{-- Curso --}}
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Curso <span class="text-danger">*</span></label>
+                    <div class="input-group">
+                        <select name="curso_id" id="curso_id"
+                                class="form-select @error('curso_id') is-invalid @enderror" required>
+                            <option value="">— Seleccioná un curso —</option>
+                            @foreach($cursos as $curso)
+                                <option value="{{ $curso->id }}"
+                                    data-anio="{{ strtolower($curso->anio) }}"
+                                    data-division="{{ strtolower($curso->division) }}"
+                                    data-turno="{{ strtolower($curso->turno) }}"
+                                    {{ old('curso_id') == $curso->id ? 'selected' : '' }}>
+                                    {{ $curso->nombre_completo }}
+                                </option>
+                            @endforeach
+                        </select>
+                        <button type="button" class="btn btn-outline-secondary" title="Agregar curso"
+                                data-bs-toggle="modal" data-bs-target="#modalCurso">
+                            <i class="bi bi-plus-lg"></i>
+                        </button>
+                    </div>
+                    @error('curso_id')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror
+                    @if($cursos->isEmpty())
+                        <div class="form-text text-info">
+                            <i class="bi bi-info-circle me-1"></i>
+                            
+                        </div>
+                    @endif
+                </div>
+
+                {{-- Materia --}}
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Materia</label>
+                    <div class="input-group">
+                        <select name="materia_id" id="materia_id" class="form-select">
+                            <option value="">— Sin materia —</option>
+                            @foreach($materias as $m)
+                                <option value="{{ $m->id }}"
+                                    data-nombre="{{ strtolower($m->nombre) }}"
+                                    {{ old('materia_id') == $m->id ? 'selected' : '' }}>
+                                    {{ $m->nombre }}
+                                </option>
+                            @endforeach
+                        </select>
+                        <button type="button" class="btn btn-outline-secondary" title="Agregar materia"
+                                data-bs-toggle="modal" data-bs-target="#modalMateria">
+                            <i class="bi bi-plus-lg"></i>
+                        </button>
+                    </div>
+                    <div id="hintMateria" class="form-text text-warning d-none">
+                        <i class="bi bi-exclamation-triangle me-1"></i>
+                        
+                    </div>
+                </div>
+
+                {{-- Día --}}
+                <div class="col-md-2">
+                    <label class="form-label fw-semibold">Día <span class="text-danger">*</span></label>
+                    <select name="dia" id="dia"
+                            class="form-select @error('dia') is-invalid @enderror" required>
+                        <option value="">—</option>
+                        @foreach($dias as $dia)
+                            <option value="{{ $dia }}" {{ old('dia') == $dia ? 'selected' : '' }}>
+                                {{ ucfirst($dia) }}
+                            </option>
+                        @endforeach
+                    </select>
+                    @error('dia')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                </div>
+
+                {{-- Hora inicio --}}
+                <div class="col-md-2">
+                    <label class="form-label fw-semibold">Hora inicio <span class="text-danger">*</span></label>
+                    <input type="time" name="horainicio" id="horainicio"
+                           class="form-control @error('horainicio') is-invalid @enderror"
+                           value="{{ old('horainicio') }}" required>
+                    @error('horainicio')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                </div>
+
+                {{-- Hora fin --}}
+                <div class="col-md-2">
+                    <label class="form-label fw-semibold">Hora fin <span class="text-danger">*</span></label>
+                    <input type="time" name="horafin" id="horafin"
+                           class="form-control @error('horafin') is-invalid @enderror"
+                           value="{{ old('horafin') }}" required>
+                    @error('horafin')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                </div>
+            </div>
+
+            <div class="mt-4 d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-circle me-1"></i>Guardar horario
+                </button>
+                <a href="{{ route('horarios.index') }}" class="btn btn-outline-secondary">Cancelar</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+{{-- ══════════════════════════════════════════════════════════════════════
+     MODAL: Nuevo Establecimiento
+═══════════════════════════════════════════════════════════════════════ --}}
+<div class="modal fade" id="modalEstablecimiento" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-building me-2"></i>Nuevo establecimiento</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="alertEstablecimiento" class="alert alert-danger d-none"></div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Nombre <span class="text-danger">*</span></label>
+                    <input type="text" id="nuevoEstabNombre" class="form-control"
+                           placeholder="Ej: Escuela N° 1 Juan B. Justo">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Número de escuela</label>
+                    <input type="text" id="nuevoEstabNumero" class="form-control" placeholder="Ej: 1">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="guardarEstablecimiento()">
+                    <i class="bi bi-check-circle me-1"></i>Guardar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{{-- ══════════════════════════════════════════════════════════════════════
+     MODAL: Nuevo Curso
+═══════════════════════════════════════════════════════════════════════ --}}
+<div class="modal fade" id="modalCurso" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-mortarboard me-2"></i>Nuevo curso</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="alertCurso" class="alert alert-danger d-none"></div>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Año <span class="text-danger">*</span></label>
+                        <input type="text" id="nuevoCursoAnio" class="form-control" placeholder="Ej: 1">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">División <span class="text-danger">*</span></label>
+                        <input type="text" id="nuevoCursoDivision" class="form-control" placeholder="Ej: A">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Turno</label>
+                        <select id="nuevoCursoTurno" class="form-select">
+                            <option value="">— Opcional —</option>
+                            <option value="mañana">Mañana</option>
+                            <option value="tarde">Tarde</option>
+                            <option value="noche">Noche</option>
+                            <option value="vespertino">Vespertino</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="guardarCurso()">
+                    <i class="bi bi-check-circle me-1"></i>Guardar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{{-- ══════════════════════════════════════════════════════════════════════
+     MODAL: Nueva Materia
+═══════════════════════════════════════════════════════════════════════ --}}
+<div class="modal fade" id="modalMateria" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-book me-2"></i>Nueva materia</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="alertMateria" class="alert alert-danger d-none"></div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Nombre <span class="text-danger">*</span></label>
+                    <input type="text" id="nuevaMaterialNombre" class="form-control"
+                           placeholder="Ej: Matemática">
+                </div>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Tipo</label>
+                        <select id="nuevaMaterialTipo" class="form-select">
+                            <option value="aula">Aula</option>
+                            <option value="taller">Taller</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Tipo hora</label>
+                        <select id="nuevaMaterialTipoHora" class="form-select">
+                            <option value="catedra">Cátedra</option>
+                            <option value="modulo">Módulo</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="guardarMateria()">
+                    <i class="bi bi-check-circle me-1"></i>Guardar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@endsection
+
+@push('scripts')
+<script>
+const CSRF = document.querySelector('meta[name="csrf-token"]')?.content ?? '{{ csrf_token() }}';
+
+const materiasPorCurso = @json($cursos->mapWithKeys(function($c) use ($materias) {
+    $delCurso = $materias->filter(function($m) use ($c) {
+        return $m->anio == $c->anio
+            && (empty($c->especialidad_id) || $m->especialidad_id == $c->especialidad_id)
+            && (empty($c->establecimiento_id) || $m->establecimiento_id == $c->establecimiento_id);
+    })->values();
+    return [$c->id => $delCurso->map(fn($m) => ['id' => $m->id, 'nombre' => $m->nombre])];
+}));
+const todasLasMaterias = @json($materias->map(fn($m) => ['id' => $m->id, 'nombre' => $m->nombre]));
+
+document.getElementById('curso_id').addEventListener('change', function () {
+    const select  = document.getElementById('materia_id');
+    const cursoId = this.value;
+    const materias = (cursoId && materiasPorCurso[cursoId]?.length)
+                   ? materiasPorCurso[cursoId]
+                   : todasLasMaterias;
+    select.innerHTML = '<option value="">— Sin materia —</option>';
+    materias.forEach(m => {
+        select.innerHTML += `<option value="${m.id}" data-nombre="${m.nombre.toLowerCase()}">${m.nombre}</option>`;
+    });
+});
+
+// ── Alta rápida: Establecimiento ─────────────────────────────────────────────
+async function guardarEstablecimiento() {
+    const nombre = document.getElementById('nuevoEstabNombre').value.trim();
+    const numero = document.getElementById('nuevoEstabNumero').value.trim();
+    const alert  = document.getElementById('alertEstablecimiento');
+
+    if (!nombre) { mostrarAlerta(alert, 'El nombre es obligatorio.'); return; }
+
+    try {
+        const res  = await fetchQuick('{{ route("horarios.quick.establecimiento") }}', { nombre, numero });
+        const opt  = new Option(res.label, res.id, true, true);
+        opt.dataset.nombre = res.label.toLowerCase();
+        document.getElementById('establecimiento_id').add(opt);
+        bootstrap.Modal.getInstance(document.getElementById('modalEstablecimiento')).hide();
+        document.getElementById('nuevoEstabNombre').value = '';
+        document.getElementById('nuevoEstabNumero').value = '';
+        alert.classList.add('d-none');
+    } catch (e) {
+        mostrarAlerta(alert, e.message);
+    }
+}
+
+// ── Alta rápida: Curso ────────────────────────────────────────────────────────
+async function guardarCurso() {
+    const anio     = document.getElementById('nuevoCursoAnio').value.trim();
+    const division = document.getElementById('nuevoCursoDivision').value.trim();
+    const turno    = document.getElementById('nuevoCursoTurno').value;
+    const alert    = document.getElementById('alertCurso');
+
+    if (!anio || !division) { mostrarAlerta(alert, 'Año y división son obligatorios.'); return; }
+
+    try {
+        const res = await fetchQuick('{{ route("horarios.quick.curso") }}', { anio, division, turno });
+        const opt = new Option(res.label, res.id, true, true);
+        opt.dataset.anio     = anio.toLowerCase();
+        opt.dataset.division = division.toLowerCase();
+        opt.dataset.turno    = turno.toLowerCase();
+        document.getElementById('curso_id').add(opt);
+        // Recargar materias del nuevo curso (vacío por ahora)
+        document.getElementById('curso_id').dispatchEvent(new Event('change'));
+        bootstrap.Modal.getInstance(document.getElementById('modalCurso')).hide();
+        document.getElementById('nuevoCursoAnio').value = '';
+        document.getElementById('nuevoCursoDivision').value = '';
+        document.getElementById('nuevoCursoTurno').value = '';
+        alert.classList.add('d-none');
+    } catch (e) {
+        mostrarAlerta(alert, e.message);
+    }
+}
+
+// ── Alta rápida: Materia ──────────────────────────────────────────────────────
+async function guardarMateria() {
+    const nombre    = document.getElementById('nuevaMaterialNombre').value.trim();
+    const tipo      = document.getElementById('nuevaMaterialTipo').value;
+    const tipoHora  = document.getElementById('nuevaMaterialTipoHora').value;
+    const alert     = document.getElementById('alertMateria');
+
+    if (!nombre) { mostrarAlerta(alert, 'El nombre es obligatorio.'); return; }
+
+    try {
+        const res = await fetchQuick('{{ route("horarios.quick.materia") }}', { nombre, tipo, tipoHora });
+        const opt = new Option(res.label, res.id, true, true);
+        opt.dataset.nombre = res.label.toLowerCase();
+        document.getElementById('materia_id').add(opt);
+        bootstrap.Modal.getInstance(document.getElementById('modalMateria')).hide();
+        document.getElementById('nuevaMaterialNombre').value = '';
+        alert.classList.add('d-none');
+    } catch (e) {
+        mostrarAlerta(alert, e.message);
+    }
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+async function fetchQuick(url, data) {
+    const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': CSRF,
+            'Accept': 'application/json',
+        },
+        body: JSON.stringify(data),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message ?? 'Error al guardar.');
+    return json;
+}
+
+function mostrarAlerta(el, msg) {
+    el.textContent = msg;
+    el.classList.remove('d-none');
+}
+
+// ── Autocompletar desde designación ──────────────────────────────────────────
+function autocompletar() {
+    const sel = document.getElementById('selectDesignacion');
+    const opt = sel.options[sel.selectedIndex];
+
+    if (!opt || !opt.value) {
+        alert('Seleccioná una designación primero.');
+        return;
+    }
+
+    const nombreEstab   = opt.dataset.nombreestablecimiento?.toLowerCase() ?? '';
+    const nombreMateria = opt.dataset.nombremateria?.toLowerCase() ?? '';
+    const anoDesignado  = opt.dataset.anodesignado?.toLowerCase() ?? '';
+    const division      = opt.dataset.divisiondesignada?.toLowerCase() ?? '';
+    const turno         = opt.dataset.turno?.toLowerCase() ?? '';
+    const dia           = opt.dataset.dia ?? '';
+    const horaEntrada   = opt.dataset.horaentrada ?? '';
+    const horaSalida    = opt.dataset.horasalida ?? '';
+
+    document.getElementById('dia').value        = dia;
+    document.getElementById('horainicio').value = horaEntrada;
+    document.getElementById('horafin').value    = horaSalida;
+
+    // Establecimiento
+    let estEncontrado = false;
+    const selectEst = document.getElementById('establecimiento_id');
+    for (let i = 0; i < selectEst.options.length; i++) {
+        const o = selectEst.options[i];
+        const nombre = o.dataset.nombre ?? '';
+        if (nombre && (
+            nombre.includes(nombreEstab) ||
+            nombreEstab.includes(nombre) ||
+            levenshtein(nombre, nombreEstab) < 5
+        )) {
+            selectEst.value = o.value;
+            estEncontrado = true;
+            break;
+        }
+    }
+    document.getElementById('hintEstablecimiento').classList.toggle('d-none', estEncontrado);
+
+    // Curso
+    let cursoEncontrado = false;
+    const selectCurso = document.getElementById('curso_id');
+    for (let i = 0; i < selectCurso.options.length; i++) {
+        const o   = selectCurso.options[i];
+        const anio  = o.dataset.anio ?? '';
+        const div   = o.dataset.division ?? '';
+        const trn   = o.dataset.turno ?? '';
+        if (
+            (anio.includes(anoDesignado) || anoDesignado.includes(anio)) &&
+            (div === division || !division) &&
+            (trn.includes(turno) || turno.includes(trn) || !turno)
+        ) {
+            selectCurso.value = o.value;
+            cursoEncontrado = true;
+            selectCurso.dispatchEvent(new Event('change'));
+            break;
+        }
+    }
+
+    // Materia (después del change del curso)
+    setTimeout(() => {
+        let materiaEncontrada = false;
+        const selectMat = document.getElementById('materia_id');
+        for (let i = 0; i < selectMat.options.length; i++) {
+            const o    = selectMat.options[i];
+            const nombre = o.dataset.nombre ?? '';
+            if (nombre && (
+                nombre.includes(nombreMateria) ||
+                nombreMateria.includes(nombre) ||
+                levenshtein(nombre, nombreMateria) < 8
+            )) {
+                selectMat.value = o.value;
+                materiaEncontrada = true;
+                break;
+            }
+        }
+        document.getElementById('hintMateria').classList.toggle('d-none', materiaEncontrada);
+    }, 300);
+
+    // Feedback visual
+    const btn = event.target;
+    const original = btn.innerHTML;
+    btn.innerHTML = '<i class="bi bi-check-circle me-1"></i>Completado';
+    btn.classList.replace('btn-outline-primary', 'btn-success');
+    setTimeout(() => {
+        btn.innerHTML = original;
+        btn.classList.replace('btn-success', 'btn-outline-primary');
+    }, 2000);
+}
+
+function levenshtein(a, b) {
+    const m = a.length, n = b.length;
+    const dp = Array.from({length: m+1}, (_, i) =>
+        Array.from({length: n+1}, (_, j) => i === 0 ? j : j === 0 ? i : 0));
+    for (let i = 1; i <= m; i++)
+        for (let j = 1; j <= n; j++)
+            dp[i][j] = a[i-1] === b[j-1]
+                ? dp[i-1][j-1]
+                : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+    return dp[m][n];
+}
+</script>
+@endpush
